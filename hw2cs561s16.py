@@ -11,42 +11,71 @@ def backwardChaining_ask(kb,predicates,query):
 	predicate=goal.rsplit('(', 1)[0]
 	if predicate not in predicates:
  		return false
- 	return backwardChaining_or(kb,predicates,goal,theta)
+ 	else:
+ 		generator=backwardChaining_or(kb,predicates,goal,theta)
+ 	for substitutions in generator:
+ 		print(substitutions)
+ 	return 1
 
-# BackwardChaining_OR:
+# BackwardChaining_OR:yileds a substitution
 # theta: mapping of variables built so far
-
 # ********* if multiple mappings to a variable create a list as the key
 def backwardChaining_or(kb,predicates,goal,theta):
+	print("Inside OR")
 	#get the raw predicate without arguments
 	predicate=goal.rsplit('(', 1)[0]
+	if predicate not in predicates:
+ 		return
 	#get the corresponding function with args
 	predicate_functions=predicates[predicate]
 	for predicate_func in predicate_functions:
 		#standardize variables
-		updated_dict=standardize_var(goal,predicate_func)
-		theta=updated_dict
-		print("### dictionary of mapping ##\n")
+		unify=standardize_var(goal,predicate_func,theta)
+		if unify==0:
+			print("False: "+goal)
+			return
+		print("### dictionary of mapping ##")
 		print(theta)
+		print("\n")
 		pred=map_to_var(predicate_func,theta)
 		print("Ask: "+pred[0])
 		#extract the corresponding implications list
 		implications_list=kb[predicate_func]
+		first=pred[0]
+		if not implications_list:
+			if(fact(first)):
+				if first in kb:
+					print("True: "+first)
+				else:
+					print("False: "+first)
+			yield theta
 		for rule in implications_list:
 			#replace the variables with the new mappings
 			conjugates=map_to_var(rule,theta)
-			print("\n## Conjugates ##")
-			print(conjugates)
-			or_ans=backwardChaining_and(kb,predicates,conjugates,theta)
+			for gen in backwardChaining_and(kb,predicates,conjugates,theta):
+				yield gen
 	#extract the corresponding 
-	yield or_ans
-
 # BackwardChaining_AND
 def backwardChaining_and(kb,predicates,goals,theta):
+	print("Inside AND")
 	#all goals must be proved
+	if len(goals)==0:
+		yield theta
+	else:
+		first=goals[0]
+		rest=goals[1:]
+		
+		for theta_1 in backwardChaining_or(kb,predicates,first,theta):
+			for theta_2 in backwardChaining_and(kb,predicates,rest,theta_1):
+				yield theta_2
 
-	return
-
+def fact(predicate):
+	variables_in_predicate=extract_params(predicate)
+	for var in variables_in_predicate:
+		var=var.strip()
+		if var[0].islower():
+			return 0
+	return 1
 def map_to_var(rule,theta):
 	#replace each variable in every conjugate with its mapping
 	
@@ -69,23 +98,35 @@ def map_to_var(rule,theta):
 		new_conju.append(new_pred)
 	return new_conju
 
-def standardize_var(goal,predicate_func):
-	result=dict()
+def standardize_var(goal,predicate_func,result):
 	#extract the variables from both
+	flag=1
 	variables_in_goal=extract_params(goal)
 	variables_in_rule=extract_params(predicate_func)
 	#map them
+	if len(variables_in_goal)!=len(variables_in_rule):
+		return 0
+
 	for (var1,var2) in zip(variables_in_goal,variables_in_rule):
+
 		var1=var1.strip()
 		var2=var2.strip()
-		#add to dictionary
+		print("standardize: "+var1+" && "+var2)
+		#if both have variables
 		if var1.islower() and var2.islower():
 			result[var2]="_"
-		elif var1.islower():
+		#if it is constant
+		elif var1[0].isupper() and var2[0].isupper():
+			if var1!=var2:
+				flag=0
+
+		elif var1.islower() or var1=="_":
 			result[var1]=var2
-		else:
+
+		elif var2.islower() or var2=="_":
 			result[var2]=var1
-	return result
+
+	return flag
 def extract_params(predicate):
 	variables_in_rule=re.search('\(.*\)',predicate)
 	variables_in_rule=variables_in_rule.group()
