@@ -14,14 +14,14 @@ def backwardChaining_ask(kb,predicates,query):
  	else:
  		generator=backwardChaining_or(kb,predicates,goal,theta)
  	for substitutions in generator:
- 		print(substitutions)
+ 		print("True")
  	return 1
 
 # BackwardChaining_OR:yileds a substitution
 # theta: mapping of variables built so far
 # ********* if multiple mappings to a variable create a list as the key
 def backwardChaining_or(kb,predicates,goal,theta):
-	print("OR")
+	#print("OR")
 	#get the raw predicate without arguments
 	predicate=goal.rsplit('(', 1)[0]
 	params=extract_params(goal)
@@ -57,14 +57,24 @@ def backwardChaining_or(kb,predicates,goal,theta):
 	#extract the corresponding 
 # BackwardChaining_AND
 def backwardChaining_and(kb,predicates,goals,theta):
-	print("AND")
+	#print("AND")
 	#all goals must be proved
 	if len(goals)==0:
 		yield theta
 	else:
+		mapping=dict()
 		first=goals[0]
 		rest=goals[1:]
-		print("Ask: "+first)
+		vars_first=extract_params(first)
+		for v in vars_first:
+			v=v.strip()
+			if v.islower():
+				if v in theta:
+					mapping[v]=theta[v]
+				else:
+					mapping[v]="_"
+		display_first=map_to_var(first,mapping)
+		print("Ask: "+display_first[0])
 		for theta_1 in backwardChaining_or(kb,predicates,first,theta):
 			for theta_2 in backwardChaining_and(kb,predicates,rest,theta_1):
 				yield theta_2
@@ -153,15 +163,15 @@ def standardize_variables(clause,var_dict,index):
 	for conjugate in premises:
 		var_conju=extract_params(conjugate)
 		for i in var_conju:
+			i=i.strip()
 			if i.islower():
-				i=i.strip()
 				variables.update(i)
 	conclusion=clause.rsplit('> ', 1)[1]
 	var_in_con=extract_params(conclusion)
 	for i in var_in_con:
-			if i.islower():
-				i=i.strip()
-				variables.update(i)
+		i=i.strip()
+		if i.islower():
+			variables.update(i)
 	for v in variables:
 		if v not in var_dict:
 			var_dict[v]=1
