@@ -21,35 +21,35 @@ def backwardChaining_ask(kb,predicates,query):
 # theta: mapping of variables built so far
 # ********* if multiple mappings to a variable create a list as the key
 def backwardChaining_or(kb,predicates,goal,theta):
-	print("Inside OR")
+	print("OR")
 	#get the raw predicate without arguments
 	predicate=goal.rsplit('(', 1)[0]
+	params=extract_params(goal)
+	#print(params)
 	if predicate not in predicates:
  		return
 	#get the corresponding function with args
 	predicate_functions=predicates[predicate]
 	for predicate_func in predicate_functions:
 		#standardize variables
-		unify=standardize_var(goal,predicate_func,theta)
-		if unify==0:
-			print("False: "+goal)
-			return
-		print("### dictionary of mapping ##")
-		print(theta)
-		print("\n")
-		pred=map_to_var(predicate_func,theta)
-		print("Ask: "+pred[0])
-		#extract the corresponding implications list
 		implications_list=kb[predicate_func]
-		first=pred[0]
+		first=predicate_func
 		if not implications_list:
 			if(fact(first)):
 				if first in kb:
+					actual_param=extract_params(first)
+					key=theta.keys()[theta.values().index(params[0])]
+					theta[key]=actual_param[0]
 					print("True: "+first)
 				else:
 					print("False: "+first)
-			yield theta
+				yield theta
 		for rule in implications_list:
+			flag_unify=unify(goal,predicate_func,theta)
+			if flag_unify==0:
+				print("False: "+goal)
+				return
+			pred=map_to_var(predicate_func,theta)
 			#replace the variables with the new mappings
 			conjugates=map_to_var(rule,theta)
 			for gen in backwardChaining_and(kb,predicates,conjugates,theta):
@@ -57,14 +57,14 @@ def backwardChaining_or(kb,predicates,goal,theta):
 	#extract the corresponding 
 # BackwardChaining_AND
 def backwardChaining_and(kb,predicates,goals,theta):
-	print("Inside AND")
+	print("AND")
 	#all goals must be proved
 	if len(goals)==0:
 		yield theta
 	else:
 		first=goals[0]
 		rest=goals[1:]
-		
+		print("Ask: "+first)
 		for theta_1 in backwardChaining_or(kb,predicates,first,theta):
 			for theta_2 in backwardChaining_and(kb,predicates,rest,theta_1):
 				yield theta_2
@@ -98,7 +98,7 @@ def map_to_var(rule,theta):
 		new_conju.append(new_pred)
 	return new_conju
 
-def standardize_var(goal,predicate_func,result):
+def unify(goal,predicate_func,result):
 	#extract the variables from both
 	flag=1
 	variables_in_goal=extract_params(goal)
@@ -111,14 +111,24 @@ def standardize_var(goal,predicate_func,result):
 
 		var1=var1.strip()
 		var2=var2.strip()
-		print("standardize: "+var1+" && "+var2)
+		#print("standardize: "+var1+" && "+var2)
+		if var1==var2:
+			flag=1
 		#if both have variables
-		if var1.islower() and var2.islower():
-			result[var2]="_"
+		elif var1.islower() and var2.islower():
+			if var1 in result:
+				result[var2]=result[var1]
+			else:
+				result[var1]=var2
 		#if it is constant
 		elif var1[0].isupper() and var2[0].isupper():
 			if var1!=var2:
 				flag=0
+
+		elif var1.islower() and var2[0].isupper():
+			result[var1]=var2
+		elif var2.islower() and var1[0].isupper():
+			result[var2]=var1
 
 		elif var1.islower() or var1=="_":
 			result[var1]=var2
@@ -135,10 +145,44 @@ def extract_params(predicate):
 	variables_in_rule=variables_in_rule.split(',')
 	return variables_in_rule
 
+def standardize_variables(clause,var_dict,index):
+	variables=set()
+	temp_dict=dict()
+	premise=clause.rsplit(' =', 1)[0]
+	premises=premise.split(" && ")
+	for conjugate in premises:
+		var_conju=extract_params(conjugate)
+		for i in var_conju:
+			if i.islower():
+				i=i.strip()
+				variables.update(i)
+	conclusion=clause.rsplit('> ', 1)[1]
+	var_in_con=extract_params(conclusion)
+	for i in var_in_con:
+			if i.islower():
+				i=i.strip()
+				variables.update(i)
+	for v in variables:
+		if v not in var_dict:
+			var_dict[v]=1
+		else:
+			new_name=v+str(index)
+			temp_dict[v]=new_name
+			var_dict[new_name]=1
+
+	new_conju=map_to_var(premise,temp_dict)	
+	new_conclusion=map_to_var(conclusion,temp_dict)
+	new_premise=""
+	for conj in new_conju[:-1]:
+		new_premise+=conj+" && "
+	new_premise+=new_conju[-1]
+	return new_premise,new_conclusion[0]
 def main():
 	#get the input file
 	inputFile=sys.argv[2]
 	counter=0
+	index=0
+	var_dict=dict()
 	#hashtable for all predicates
 	predicates=dict()
 	#conclusion is the key and the premise of conjuctions is the value
@@ -154,9 +198,10 @@ def main():
 			clause=f.readline().rstrip()
 			# check if clause is a conjuction
 			if "=>" in clause:
-				premise=clause.rsplit(' =', 1)[0]
 				conclusion=clause.rsplit('> ', 1)[1]
 				predicate=conclusion.rsplit('(', 1)[0]
+				index+=1
+				premise,conclusion=standardize_variables(clause,var_dict,index)
 			#otherwise clause is a fact with a single atomic sentence
 			else:
 				premise=""
@@ -173,12 +218,6 @@ def main():
 			if conclusion not in predicates[predicate]:
 				predicates[predicate].append(conclusion)
 
-	print("\n Query:",query)
-	print("\n########## predicates ##############\n")
-	print(predicates)
-	print("\n########## kb ##############\n")
-	print(kb)
-	print("\n")
 
 	# call function with KB and query
 	backwardChaining_ask(kb,predicates,query)
